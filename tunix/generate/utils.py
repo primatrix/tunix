@@ -19,6 +19,7 @@ import functools
 import gc
 import logging
 import re
+import math
 from typing import Any, Dict, Iterator, List, Optional
 
 from flax import nnx
@@ -419,12 +420,11 @@ def transfer_state_with_mappings(
   sharding_dict = None
   if reshard_fn:
     sharding_dict = dict(
-        [(key, tgt_params.value.sharding) for key, tgt_params in tgt_flat_list]
+        [(key, tgt_params.sharding) for key, tgt_params in tgt_flat_list]
     )
 
   # Maps source keys to target tensor(s) and sharding spec
   src_to_tgt_map = build_flat_dict(tgt_flat_list, key_mappings)
-
   # Flatten the source state, unrolling any scanned layers.
   unscanned_src_to_tgt_flat = {}
   for src_keys, src_val in src_state.flat_state():
@@ -467,7 +467,7 @@ def transfer_state_with_mappings(
       val,
       tgt_param,
   ) in unscanned_src_to_tgt_flat.items():
-    last_key = flat_src_key.split('.')[-1]
+    last_key = flat_src_key
     if (
         transpose_keys
         and (last_key in transpose_keys)
@@ -479,17 +479,20 @@ def transfer_state_with_mappings(
       val = key_mapping_hook_fns[flat_src_key](val)
     if tgt_param.value.shape != val.shape:
       if len(val.shape) != len(tgt_param.value.shape):
-        if re.compile(r'layers\..*\.attn\.(q|k|v)_bias').match(flat_src_key):
-          new_shape = (
-              tgt_param.value.shape[0],
-              val.shape[0] // tgt_param.value.shape[0],
-          )
-          val = jnp.reshape(val, new_shape)
-        else:
-          raise ValueError(
-              f'Rank mismatch for {tgt_key}: {val.shape} vs '
-              f'{tgt_param.value.shape}'
-          )
+         if re.compile(r'layers\..*\.attn\.(q|k|v)_bias').match(flat_src_key):
+           new_shape = (
+               tgt_param.value.shape[0],
+               val.shape[0] // tgt_param.value.shape[0],
+           )
+           val = jnp.reshape(val, new_shape)
+         else:
+            if math.prod(val.shape) == math.prod(tgt_param.value.shape):
+                val = jnp.reshape(val, tgt_param.value.shape)
+            else:
+                raise ValueError(
+                    f'Rank mismatch for {tgt_key}: {val.shape} vs '
+                    f'{tgt_param.value.shape}'
+                )
       pad_width = []
       for src_dim, tgt_dim in zip(val.shape, tgt_param.value.shape):
         if src_dim < tgt_dim:
@@ -520,14 +523,14 @@ def transfer_state_with_mappings(
   # Batch reshard and assign
   if reshard_fn:
     tgt_flat_dict = dict(
-        [(key, tgt_params.value) for key, tgt_params in tgt_flat_list]
+        [(key, tgt_params) for key, tgt_params in tgt_flat_list]
     )
     resharded_values_flat_dict = reshard_fn(tgt_flat_dict, sharding_dict)
     for tgt_key, tgt_param in tgt_flat_list:
       assert (
           tgt_key in resharded_values_flat_dict
       ), f'Key {tgt_key} not in resharded values'
-      tgt_param.value = resharded_values_flat_dict[tgt_key]
+      tgt_param = resharded_values_flat_dict[tgt_key]
 
   return dst_state.from_flat_path(tgt_flat_list)
 
