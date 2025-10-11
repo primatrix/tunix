@@ -19,6 +19,7 @@ import functools
 import gc
 import logging
 import re
+import math
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from flax import nnx
@@ -471,7 +472,10 @@ def _apply_transpose(
   if last_key in transpose_keys and 'lora' not in last_key:
     logging.debug('Applying transpose on %s', src_key)
     return jnp.transpose(val, transpose_keys[last_key])
-
+  all_key = src_key
+  if all_key in transpose_keys and 'lora' not in all_key:
+      logging.debug('Applying transpose on %s', src_key)
+      return jnp.transpose(val, transpose_keys[all_key])
   return val
 
 
@@ -500,7 +504,8 @@ def _reshape_attention_bias(
         new_shape,
     )
     return jnp.reshape(val, new_shape)
-
+  if math.prod(tgt_shape) == math.prod(val.shape):
+     return jnp.reshape(val, tgt_shape)
   raise ShapeMismatchError(
       f'Rank mismatch for {src_key}: {val.shape} vs {tgt_shape}'
   )
@@ -623,7 +628,8 @@ def transfer_state_with_mappings(
   sharding_dict = None
   if reshard_fn:
     sharding_dict = {
-        key: tgt_params.value.sharding for key, tgt_params in tgt_flat_list
+        key: tgt_params.value.sharding if hasattr(tgt_params, "value")
+        else tgt_params.sharding for key, tgt_params in tgt_flat_list
     }
 
   # Build source-to-target mapping
@@ -659,13 +665,17 @@ def transfer_state_with_mappings(
 
   # Batch reshard and assign if resharding is configured
   if reshard_fn:
-    tgt_flat_dict = {key: tgt_params.value for key, tgt_params in tgt_flat_list}
+    tgt_flat_dict = {key: tgt_params.value if hasattr(tgt_params, "value") else tgt_params for key, tgt_params in tgt_flat_list}
     resharded_values_flat_dict = reshard_fn(tgt_flat_dict, sharding_dict)
 
     for tgt_key, tgt_param in tgt_flat_list:
-      if tgt_key not in resharded_values_flat_dict:
-        raise MappingError(f'Key {tgt_key} not found in resharded values')
-      tgt_param.value = resharded_values_flat_dict[tgt_key]
+      assert (
+          tgt_key in resharded_values_flat_dict
+      ), f'Key {tgt_key} not in resharded values'
+      if hasattr(tgt_param, "value"):
+        tgt_param.value = resharded_values_flat_dict[tgt_key]
+      else:
+        tgt_param = resharded_values_flat_dict[tgt_key]
 
   return dst_state.from_flat_path(tgt_flat_list)
 

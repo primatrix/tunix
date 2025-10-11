@@ -587,6 +587,52 @@ class Llama3(nnx.Module):
   def num_embed(self) -> int:
     return self.config.embed_dim
 
+  @staticmethod
+  def to_sglang_jax_mapping():
+      return {
+          'lm_head.w': ('lm_head.embedding', (None, 'model')),
+          'embedder.input_embedding': (
+              'transformer.embed_tokens.embedding',
+              ('model', None),
+          ),
+          'layers.*.input_layernorm.w': (
+              'transformer.layers.*.input_layernorm.scale',
+              (None,),
+          ),
+          'layers.*.mlp.down_proj.kernel': (
+              'transformer.layers.*.mlp.down_proj.weight',
+              ('model', None),
+          ),
+          'layers.*.mlp.gate_proj.kernel': (
+              'transformer.layers.*.mlp.gate_proj.weight',
+              (None, 'model'),
+          ),
+          'layers.*.mlp.up_proj.kernel': (
+              'transformer.layers.*.mlp.up_proj.weight',
+              (None, 'model'),
+          ),
+          'layers.*.post_attention_layernorm.w': (
+              'transformer.layers.*.post_attention_layernorm.scale',
+              (None,),
+          ),
+          'layers.*.attn.k_proj.w': (
+              'transformer.layers.*.self_attn.k_proj.weight',
+              (None, 'model', None),
+          ),
+          'layers.*.attn.o_proj.w': (
+              'transformer.layers.*.self_attn.o_proj.weight',
+              ('model', None, None),
+          ),
+          'layers.*.attn.q_proj.w': (
+              'transformer.layers.*.self_attn.q_proj.weight',
+              (None, 'model', None),
+          ),
+          'layers.*.attn.v_proj.w': (
+              'transformer.layers.*.self_attn.v_proj.weight',
+              (None, 'model', None),
+          ),
+          'final_norm.w': ('transformer.norm.scale', (None,)),
+      }
   # For now, we are still passing sharding to vLLM, consider removing it after
   # switching to the reshard API
   @staticmethod
@@ -801,6 +847,12 @@ class Llama3(nnx.Module):
               'layers.*.self_attn.o_proj.kernel_lora_b',
               (None, None),
           ),
+      }
+
+  @staticmethod
+  def to_sglang_jax_transpose_keys():
+      return {
+          "lm_head.w": (1, 0),
       }
 
   @staticmethod
