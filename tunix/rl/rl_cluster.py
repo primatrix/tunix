@@ -366,6 +366,7 @@ class RLCluster:
     if self.cluster_config.rollout_engine not in [
         "vanilla",
         "vllm",
+        "sglang_jax",
     ]:
       raise ValueError(
           "`cluster_config.rollout_engine` should be one of `'vanilla'` or "
