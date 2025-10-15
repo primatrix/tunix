@@ -423,7 +423,7 @@ class RLCluster:
           rollout_engine=backend,
           mapping_config=self.cluster_config.rollout_mapping_config,
       )
-    elif self.cluster_confg.rollout_engine == "sglang_jax":
+    elif self.cluster_config.rollout_engine == "sglang_jax":
       from tunix.rl.rollout import sglang_jax_rollout
 
       self._rollout = sglang_jax_rollout.SglangJaxRollout(
