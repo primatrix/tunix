@@ -394,7 +394,7 @@ ref_model, mesh, model_config = load_llama3_model(
 show_hbm_usage()
 # Policy model
 
-lora_policy = get_lora_model(ref_model, mesh=mesh)
+lora_policy, _, _ = load_llama3_model("meta-llama/Llama-3.1-8B-Instruct")
 print("after lora_policy")
 show_hbm_usage()
 # nnx.display(lora_policy)
