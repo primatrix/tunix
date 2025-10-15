@@ -339,20 +339,20 @@ download_from_huggingface(repo_id=repo_id, model_path=model_path)
 
 
 def get_lora_model(base_model, mesh):
-  lora_provider = qwix.LoraProvider(
-      module_path=(
-          ".*q_einsum|.*kv_einsum|.*gate_proj|.*down_proj|.*up_proj|"
-          ".*attn_vec_einsum"
-      ),
-      rank=RANK,
-      alpha=ALPHA,
-  )
-
-  model_input = base_model.get_model_input()
-  lora_model = qwix.apply_lora_to_model(
-      base_model, lora_provider, **model_input
-  )
-
+  # lora_provider = qwix.LoraProvider(
+  #     module_path=(
+  #         ".*q_einsum|.*kv_einsum|.*gate_proj|.*down_proj|.*up_proj|"
+  #         ".*attn_vec_einsum"
+  #     ),
+  #     rank=RANK,
+  #     alpha=ALPHA,
+  # )
+  #
+  # model_input = base_model.get_model_input()
+  # lora_model = qwix.apply_lora_to_model(
+  #     base_model, lora_provider, **model_input
+  # )
+  lora_model = base_model
   with mesh:
     state = nnx.state(lora_model)
     pspecs = nnx.get_partition_spec(state)
